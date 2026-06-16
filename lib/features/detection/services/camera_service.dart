@@ -33,9 +33,10 @@ class DetectionCameraService {
       backCamera,
       // medium = ~640×480 on most Android SoCs
       // ↑ better FPS vs 'high', still enough resolution for YOLO at 640px input
-      ResolutionPreset.medium,
+      ResolutionPreset.high,
       enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.yuv420, // native format — zero conversion cost
+      imageFormatGroup:
+          ImageFormatGroup.yuv420, // native format — zero conversion cost
     );
 
     await _controller!.initialize();

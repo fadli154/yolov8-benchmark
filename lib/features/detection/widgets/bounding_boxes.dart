@@ -2,16 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/detection_controller.dart';
 
-/// Renders YOLO detection bounding boxes over the camera preview.
-/// Uses Obx — only rebuilds when yoloResults changes.
 class BoundingBoxesWidget extends StatelessWidget {
   const BoundingBoxesWidget({super.key});
 
   static const Map<String, Color> _classColors = {
-    'kaca': Color(0xFF06B6D4),     // Cyan
-    'kertas': Color(0xFF3B82F6),   // Blue
-    'logam': Color(0xFFEF4444),    // Red
-    'plastik': Color(0xFFF59E0B),  // Amber
+    'kaca': Color(0xFF06B6D4),
+    'kertas': Color(0xFF3B82F6),
+    'logam': Color(0xFFEF4444),
+    'plastik': Color(0xFFF59E0B),
   };
 
   @override
@@ -19,45 +17,73 @@ class BoundingBoxesWidget extends StatelessWidget {
     final c = Get.find<DetectionController>();
 
     return Obx(() {
-      if (c.yoloResults.isEmpty || c.cameraController == null) {
+      if (c.yoloResults.isEmpty ||
+          c.cameraController == null ||
+          !c.cameraController!.value.isInitialized) {
         return const SizedBox.shrink();
       }
 
-      final screen = MediaQuery.sizeOf(context);
-      final previewSize = c.cameraController!.value.previewSize;
+      final controller = c.cameraController!;
+      final previewSize = controller.value.previewSize;
       if (previewSize == null) return const SizedBox.shrink();
 
-      // Camera stream is landscape on Android; preview is rotated to portrait.
-      // previewSize.height = camera width → maps to screen width
-      // previewSize.width  = camera height → maps to screen height
-      final scaleX = screen.width / previewSize.height;
-      final scaleY = screen.height / previewSize.width;
+      final screenSize = MediaQuery.sizeOf(context);
 
-      return Stack(
-        children: c.yoloResults.map((r) {
-          final box = r['box'] as List<dynamic>;
-          final tag = (r['tag'] as String).toLowerCase().trim();
-          final conf = box.length > 4 ? (box[4] as num).toDouble() : 0.0;
+      // Camera preview is landscape; the stream shown in portrait needs this swap.
+      final previewWidth = previewSize.height.toDouble();
+      final previewHeight = previewSize.width.toDouble();
 
-          final double x = (box[0] as num).toDouble() * scaleX;
-          final double y = (box[1] as num).toDouble() * scaleY;
-          final double w = (box[2] as num).toDouble() * scaleX;
-          final double h = (box[3] as num).toDouble() * scaleY;
+      // Keep the same geometry as the preview display.
+      final scaleX = screenSize.width / previewWidth;
+      final scaleY = screenSize.height / previewHeight;
 
-          final color = _classColors[tag] ?? const Color(0xFF10B981);
+      return RepaintBoundary(
+        child: Stack(
+          fit: StackFit.expand,
+          children: c.yoloResults.map((result) {
+            final rawBox = result['box'] as List<dynamic>;
+            final tag = (result['tag'] ?? '').toString().toLowerCase().trim();
 
-          return Positioned(
-            left: x.clamp(0.0, screen.width - 2),
-            top: y.clamp(0.0, screen.height - 2),
-            width: w.clamp(10.0, screen.width),
-            height: h.clamp(10.0, screen.height),
-            child: _BoundingBox(
-              label: r['tag'] as String,
-              confidence: conf,
-              color: color,
-            ),
-          );
-        }).toList(),
+            if (rawBox.length < 4) {
+              return const SizedBox.shrink();
+            }
+
+            // LOG KAMU MENUNJUKKAN FORMAT INI:
+            // [x1, y1, x2, y2, conf]
+            final x1 = (rawBox[0] as num).toDouble();
+            final y1 = (rawBox[1] as num).toDouble();
+            final x2 = (rawBox[2] as num).toDouble();
+            final y2 = (rawBox[3] as num).toDouble();
+
+            final confidence = rawBox.length > 4
+                ? (rawBox[4] as num).toDouble()
+                : 0.0;
+
+            // Convert XYXY -> XYWH
+            final boxWidth = (x2 - x1).abs();
+            final boxHeight = (y2 - y1).abs();
+
+            // Scale from model/image coordinate space to screen space
+            final left = x1 * scaleX;
+            final top = y1 * scaleY;
+            final width = boxWidth * scaleX;
+            final height = boxHeight * scaleY;
+
+            final color = _classColors[tag] ?? Colors.greenAccent;
+
+            return Positioned(
+              left: left.clamp(0.0, screenSize.width - 2),
+              top: top.clamp(0.0, screenSize.height - 2),
+              width: width.clamp(10.0, screenSize.width),
+              height: height.clamp(10.0, screenSize.height),
+              child: _BoundingBox(
+                label: result['tag'].toString(),
+                confidence: confidence,
+                color: color,
+              ),
+            );
+          }).toList(),
+        ),
       );
     });
   }
