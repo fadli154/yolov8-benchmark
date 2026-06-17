@@ -17,6 +17,12 @@ class MainActivity : FlutterActivity() {
                 val totalPssKb = memoryInfo.totalPss // In KB
                 val totalPssMb = totalPssKb / 1024
                 result.success(totalPssMb)
+            } else if (call.method == "getDeviceMetadata") {
+                val metadata = HashMap<String, Any>()
+                metadata["device"] = android.os.Build.MODEL
+                metadata["androidVersion"] = android.os.Build.VERSION.RELEASE
+                metadata["sdkInt"] = android.os.Build.VERSION.SDK_INT
+                result.success(metadata)
             } else {
                 result.notImplemented()
             }

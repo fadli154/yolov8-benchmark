@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../features/detection/pages/detection_page.dart';
+import 'benchmark_page.dart';
 import 'compare_page.dart';
 
 class HomePage extends StatelessWidget {
@@ -19,7 +20,7 @@ class HomePage extends StatelessWidget {
             children: [
               const Spacer(),
 
-              // ── App icon ring ───────────────────────────────────────
+              // ── App icon ring ─────────────────────────────────────────
               Container(
                 padding: const EdgeInsets.all(22),
                 decoration: BoxDecoration(
@@ -41,34 +42,76 @@ class HomePage extends StatelessWidget {
               ),
               const SizedBox(height: 32),
 
-              // ── Title ───────────────────────────────────────────────
+              // ── Title ────────────────────────────────────────────────
               Text(
                 'Smart Waste Detector',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.outfit(
                   color: Colors.white,
-                  fontSize: 32,
+                  fontSize: 30,
                   fontWeight: FontWeight.bold,
                   letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
-                'YOLOv8 Android Benchmark',
+                'Android Mobile Benchmark · YOLOv8 TFLite',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
                   color: const Color(0xFF94A3B8),
-                  fontSize: 15,
+                  fontSize: 13,
                   fontWeight: FontWeight.w500,
-                  letterSpacing: 0.5,
+                  letterSpacing: 0.3,
                 ),
+              ),
+              const SizedBox(height: 6),
+              // Backend chips
+              Wrap(
+                spacing: 6,
+                children: ['CPU', 'GPU Delegate', 'NNAPI Delegate']
+                    .map((b) => Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981)
+                                .withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: const Color(0xFF10B981)
+                                  .withValues(alpha: 0.2),
+                            ),
+                          ),
+                          child: Text(
+                            b,
+                            style: const TextStyle(
+                                color: Color(0xFF10B981),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ))
+                    .toList(),
               ),
               const Spacer(),
 
-              // ── Buttons ─────────────────────────────────────────────
+              // ── Section: Real-time Detection ─────────────────────────
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'REAL-TIME DETECTION',
+                  style: GoogleFonts.inter(
+                    color: Colors.white24,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+
               _ModelButton(
-                label: 'Test YOLOv8n',
-                description: 'Fastest · Lower resource · Recommended for mid-range',
+                label: 'Detect with YOLOv8n',
+                description:
+                    'Fastest · Lower resource · Recommended for mid-range',
                 icon: Icons.bolt_rounded,
                 gradient: const [Color(0xFF059669), Color(0xFF10B981)],
                 onTap: () => Get.to(
@@ -77,10 +120,11 @@ class HomePage extends StatelessWidget {
                   duration: const Duration(milliseconds: 300),
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               _ModelButton(
-                label: 'Test YOLOv8s',
-                description: 'Higher accuracy · More CPU/RAM · For flagship devices',
+                label: 'Detect with YOLOv8s',
+                description:
+                    'Higher accuracy · More CPU/RAM · For flagship devices',
                 icon: Icons.auto_awesome_rounded,
                 gradient: const [Color(0xFF4338CA), Color(0xFF6366F1)],
                 onTap: () => Get.to(
@@ -89,7 +133,98 @@ class HomePage extends StatelessWidget {
                   duration: const Duration(milliseconds: 300),
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 20),
+
+              // ── Section: Benchmark ────────────────────────────────────
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'BENCHMARKING',
+                  style: GoogleFonts.inter(
+                    color: Colors.white24,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Run Benchmark — primary benchmark action
+              Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(18),
+                child: InkWell(
+                  onTap: () => Get.to(
+                    () => const BenchmarkPage(),
+                    transition: Transition.rightToLeft,
+                  ),
+                  borderRadius: BorderRadius.circular(18),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF0F766E), Color(0xFF0D9488)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF0D9488)
+                              .withValues(alpha: 0.3),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                              Icons.science_rounded,
+                              color: Colors.white,
+                              size: 22),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Run Benchmark',
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  )),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Timed run · Warm-up · Mean ± Std stats',
+                                style: GoogleFonts.inter(
+                                  color:
+                                      Colors.white.withValues(alpha: 0.75),
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.arrow_forward_ios_rounded,
+                            color: Colors.white, size: 14),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // View Results — compare page
               OutlinedButton.icon(
                 onPressed: () => Get.to(
                   () => const ComparePage(),
@@ -97,16 +232,17 @@ class HomePage extends StatelessWidget {
                 ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF10B981),
-                  side: const BorderSide(color: Color(0xFF10B981), width: 1.5),
-                  minimumSize: const Size(double.infinity, 56),
+                  side: const BorderSide(
+                      color: Color(0xFF10B981), width: 1.5),
+                  minimumSize: const Size(double.infinity, 52),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20)),
+                      borderRadius: BorderRadius.circular(18)),
                 ),
-                icon: const Icon(Icons.compare_arrows_rounded, size: 22),
+                icon: const Icon(Icons.bar_chart_rounded, size: 20),
                 label: Text(
-                  'Compare Models',
+                  'View Results & Compare',
                   style: GoogleFonts.inter(
-                      fontSize: 16, fontWeight: FontWeight.bold),
+                      fontSize: 14, fontWeight: FontWeight.bold),
                 ),
               ),
               const SizedBox(height: 16),
@@ -117,6 +253,8 @@ class HomePage extends StatelessWidget {
     );
   }
 }
+
+// ── Model Detection Button ────────────────────────────────────────────────────
 
 class _ModelButton extends StatelessWidget {
   final String label;
@@ -137,29 +275,29 @@ class _ModelButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
           decoration: BoxDecoration(
             gradient: LinearGradient(
                 colors: gradient,
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                color: gradient.last.withValues(alpha: 0.28),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
+                color: gradient.last.withValues(alpha: 0.25),
+                blurRadius: 14,
+                offset: const Offset(0, 5),
               ),
             ],
           ),
           child: Row(children: [
-            Icon(icon, color: Colors.white, size: 28),
-            const SizedBox(width: 16),
+            Icon(icon, color: Colors.white, size: 26),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -167,18 +305,20 @@ class _ModelButton extends StatelessWidget {
                   Text(label,
                       style: GoogleFonts.inter(
                           color: Colors.white,
-                          fontSize: 16,
+                          fontSize: 14,
                           fontWeight: FontWeight.bold)),
                   const SizedBox(height: 2),
                   Text(description,
                       style: GoogleFonts.inter(
-                          color: Colors.white.withValues(alpha: 0.8),
-                          fontSize: 12)),
+                          color: Colors.white.withValues(alpha: 0.78),
+                          fontSize: 11),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
                 ],
               ),
             ),
             const Icon(Icons.arrow_forward_ios_rounded,
-                color: Colors.white, size: 16),
+                color: Colors.white, size: 14),
           ]),
         ),
       ),

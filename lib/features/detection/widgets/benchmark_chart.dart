@@ -6,13 +6,11 @@ import '../../../models/benchmark.dart';
 /// All benchmark charts for journal comparison.
 /// Displays: Bar Chart, Line Chart, Pie Chart, Radar Chart.
 class BenchmarkChartWidget extends StatefulWidget {
-  final ModelBenchmarkData? nanoData;
-  final ModelBenchmarkData? smallData;
+  final List<ModelBenchmarkData> history;
 
   const BenchmarkChartWidget({
     super.key,
-    required this.nanoData,
-    required this.smallData,
+    required this.history,
   });
 
   @override
@@ -22,6 +20,9 @@ class BenchmarkChartWidget extends StatefulWidget {
 class _BenchmarkChartWidgetState extends State<BenchmarkChartWidget>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+
+  String _selectedModelFilter = 'All'; // 'All', 'YOLOv8n', 'YOLOv8s'
+  String _selectedBackendFilter = 'All'; // 'All', 'CPU', 'GPU', 'NNAPI'
 
   @override
   void initState() {
@@ -37,9 +38,73 @@ class _BenchmarkChartWidgetState extends State<BenchmarkChartWidget>
 
   @override
   Widget build(BuildContext context) {
+    // ── Apply filters to history ─────────────────────────────────────────────
+    final filtered = widget.history.where((run) {
+      final matchesModel = _selectedModelFilter == 'All' ||
+          run.modelName.toLowerCase().contains(_selectedModelFilter.toLowerCase());
+      final matchesBackend = _selectedBackendFilter == 'All' ||
+          run.backendType.toUpperCase() == _selectedBackendFilter.toUpperCase();
+      return matchesModel && matchesBackend;
+    }).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Filters Row
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedModelFilter,
+                    dropdownColor: const Color(0xFF1E293B),
+                    style: const TextStyle(color: Colors.white, fontSize: 11),
+                    onChanged: (v) => setState(() => _selectedModelFilter = v!),
+                    items: const [
+                      DropdownMenuItem(value: 'All', child: Text('Semua Model')),
+                      DropdownMenuItem(value: 'YOLOv8n', child: Text('YOLOv8n (Nano)')),
+                      DropdownMenuItem(value: 'YOLOv8s', child: Text('YOLOv8s (Small)')),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedBackendFilter,
+                    dropdownColor: const Color(0xFF1E293B),
+                    style: const TextStyle(color: Colors.white, fontSize: 11),
+                    onChanged: (v) => setState(() => _selectedBackendFilter = v!),
+                    items: const [
+                      DropdownMenuItem(value: 'All', child: Text('Semua Backend')),
+                      DropdownMenuItem(value: 'CPU', child: Text('CPU')),
+                      DropdownMenuItem(value: 'GPU', child: Text('GPU')),
+                      DropdownMenuItem(value: 'NNAPI', child: Text('NNAPI')),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+
         // Tab bar
         Container(
           decoration: BoxDecoration(
@@ -62,27 +127,34 @@ class _BenchmarkChartWidgetState extends State<BenchmarkChartWidget>
           ),
         ),
         const SizedBox(height: 16),
+        
         SizedBox(
           height: 300,
           child: TabBarView(
             controller: _tabController,
             children: [
-              _BarChartTab(nanoData: widget.nanoData, smallData: widget.smallData),
-              _LineChartTab(nanoData: widget.nanoData, smallData: widget.smallData),
-              _PieChartTab(nanoData: widget.nanoData, smallData: widget.smallData),
-              _RadarChartTab(nanoData: widget.nanoData, smallData: widget.smallData),
+              _BarChartTab(history: filtered),
+              _LineChartTab(history: filtered),
+              _PieChartTab(history: filtered),
+              _RadarChartTab(history: filtered),
             ],
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 14),
+        
         // Legend
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _LegendItem(color: _nanoColor, label: 'YOLOv8n'),
-            const SizedBox(width: 20),
-            _LegendItem(color: _smallColor, label: 'YOLOv8s'),
-          ],
+        Center(
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 6,
+            alignment: WrapAlignment.center,
+            children: filtered.map((run) {
+              return _LegendItem(
+                color: _getRunColor(run),
+                label: '${run.modelName} (${run.backendType})',
+              );
+            }).toList(),
+          ),
         ),
       ],
     );
@@ -90,29 +162,40 @@ class _BenchmarkChartWidgetState extends State<BenchmarkChartWidget>
 }
 
 // ── Colors ────────────────────────────────────────────────────────────────────
-const _nanoColor = Color(0xFF10B981);   // emerald
-const _smallColor = Color(0xFF6366F1);  // indigo
+
+Color _getRunColor(ModelBenchmarkData run) {
+  final name = run.modelName.toLowerCase();
+  final backend = run.backendType.toUpperCase();
+  if (name.contains('8n') || name.contains('nano')) {
+    if (backend == 'GPU') return const Color(0xFF10B981); // Emerald (Green)
+    if (backend == 'NNAPI') return const Color(0xFF34D399); // Mint
+    return const Color(0xFF047857); // Dark Green (CPU)
+  } else {
+    if (backend == 'GPU') return const Color(0xFF6366F1); // Indigo (Purple-Blue)
+    if (backend == 'NNAPI') return const Color(0xFF818CF8); // Light Indigo/Blue
+    return const Color(0xFF4338CA); // Dark Indigo (CPU)
+  }
+}
 
 // ── Bar Chart ─────────────────────────────────────────────────────────────────
 
 class _BarChartTab extends StatelessWidget {
-  final ModelBenchmarkData? nanoData;
-  final ModelBenchmarkData? smallData;
+  final List<ModelBenchmarkData> history;
 
-  const _BarChartTab({required this.nanoData, required this.smallData});
+  const _BarChartTab({required this.history});
 
   @override
   Widget build(BuildContext context) {
-    if (nanoData == null && smallData == null) return _NoDataPlaceholder();
+    if (history.isEmpty) return _NoDataPlaceholder();
 
-    final metrics = [
-      ('FPS', nanoData?.averageFps ?? 0, smallData?.averageFps ?? 0),
-      ('Latency\n(ms)', nanoData?.averageLatency ?? 0, smallData?.averageLatency ?? 0),
-      ('RAM\n(MB)', nanoData?.averageRam ?? 0, smallData?.averageRam ?? 0),
-      ('Size\n(MB)', nanoData?.modelSizeMb ?? 0, smallData?.modelSizeMb ?? 0),
-    ];
-
-    final maxY = metrics.map((m) => max(m.$2, m.$3)).reduce(max) * 1.3;
+    final List<double> allValues = [];
+    for (final run in history) {
+      allValues.add(run.averageFps);
+      allValues.add(run.averageLatency);
+      allValues.add(run.averageRam);
+      allValues.add(run.modelSizeMb);
+    }
+    final maxY = (allValues.isEmpty ? 10.0 : allValues.reduce(max)) * 1.25;
 
     return BarChart(
       BarChartData(
@@ -121,9 +204,10 @@ class _BarChartTab extends StatelessWidget {
           touchTooltipData: BarTouchTooltipData(
             getTooltipColor: (_) => const Color(0xFF0F172A),
             getTooltipItem: (group, groupIndex, rod, rodIndex) {
-              final label = rodIndex == 0 ? 'YOLOv8n' : 'YOLOv8s';
+              if (rodIndex >= history.length) return null;
+              final run = history[rodIndex];
               return BarTooltipItem(
-                '$label\n${rod.toY.toStringAsFixed(1)}',
+                '${run.modelName} (${run.backendType})\n${rod.toY.toStringAsFixed(1)}',
                 const TextStyle(color: Colors.white, fontSize: 11),
               );
             },
@@ -136,11 +220,12 @@ class _BarChartTab extends StatelessWidget {
               reservedSize: 36,
               getTitlesWidget: (value, meta) {
                 final idx = value.toInt();
-                if (idx >= metrics.length) return const SizedBox();
+                final titles = ['FPS', 'Latency\n(ms)', 'RAM\n(MB)', 'Size\n(MB)'];
+                if (idx < 0 || idx >= titles.length) return const SizedBox();
                 return Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
-                    metrics[idx].$1,
+                    titles[idx],
                     style: const TextStyle(color: Colors.white60, fontSize: 10),
                     textAlign: TextAlign.center,
                   ),
@@ -151,7 +236,7 @@ class _BarChartTab extends StatelessWidget {
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              reservedSize: 36,
+              reservedSize: 40,
               getTitlesWidget: (value, meta) => Text(
                 value.toStringAsFixed(0),
                 style: const TextStyle(color: Colors.white38, fontSize: 9),
@@ -163,30 +248,28 @@ class _BarChartTab extends StatelessWidget {
         ),
         gridData: const FlGridData(
           show: true,
-          horizontalInterval: 50,
+          horizontalInterval: 100,
           getDrawingHorizontalLine: _whiteGridLine,
         ),
         borderData: FlBorderData(show: false),
-        barGroups: List.generate(metrics.length, (i) {
+        barGroups: List.generate(4, (i) {
           return BarChartGroupData(
             x: i,
-            barsSpace: 6,
-            barRods: [
-              if (nanoData != null)
-                BarChartRodData(
-                  toY: metrics[i].$2,
-                  color: _nanoColor,
-                  width: 14,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                ),
-              if (smallData != null)
-                BarChartRodData(
-                  toY: metrics[i].$3,
-                  color: _smallColor,
-                  width: 14,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                ),
-            ],
+            barsSpace: 4,
+            barRods: List.generate(history.length, (runIndex) {
+              final run = history[runIndex];
+              double toY = 0.0;
+              if (i == 0) toY = run.averageFps;
+              if (i == 1) toY = run.averageLatency;
+              if (i == 2) toY = run.averageRam;
+              if (i == 3) toY = run.modelSizeMb;
+              return BarChartRodData(
+                toY: toY,
+                color: _getRunColor(run),
+                width: history.length > 5 ? 5 : 8,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
+              );
+            }),
           );
         }),
       ),
@@ -197,46 +280,29 @@ class _BarChartTab extends StatelessWidget {
 // ── Line Chart ────────────────────────────────────────────────────────────────
 
 class _LineChartTab extends StatelessWidget {
-  final ModelBenchmarkData? nanoData;
-  final ModelBenchmarkData? smallData;
+  final List<ModelBenchmarkData> history;
 
-  const _LineChartTab({required this.nanoData, required this.smallData});
+  const _LineChartTab({required this.history});
 
   @override
   Widget build(BuildContext context) {
-    if (nanoData == null && smallData == null) return _NoDataPlaceholder();
+    if (history.isEmpty) return _NoDataPlaceholder();
 
     final List<LineChartBarData> lines = [];
 
-    if (nanoData != null) {
-      final pts = _toSpots(nanoData!.fpsTimeline);
+    for (int runIndex = 0; runIndex < history.length; runIndex++) {
+      final run = history[runIndex];
+      final pts = _toSpots(run.fpsTimeline);
       if (pts.isNotEmpty) {
         lines.add(LineChartBarData(
           spots: pts,
           isCurved: true,
-          color: _nanoColor,
+          color: _getRunColor(run),
           barWidth: 2,
           dotData: const FlDotData(show: false),
           belowBarData: BarAreaData(
             show: true,
-            color: _nanoColor.withValues(alpha: 0.08),
-          ),
-        ));
-      }
-    }
-
-    if (smallData != null) {
-      final pts = _toSpots(smallData!.fpsTimeline);
-      if (pts.isNotEmpty) {
-        lines.add(LineChartBarData(
-          spots: pts,
-          isCurved: true,
-          color: _smallColor,
-          barWidth: 2,
-          dotData: const FlDotData(show: false),
-          belowBarData: BarAreaData(
-            show: true,
-            color: _smallColor.withValues(alpha: 0.08),
+            color: _getRunColor(run).withValues(alpha: 0.04),
           ),
         ));
       }
@@ -249,6 +315,16 @@ class _LineChartTab extends StatelessWidget {
         lineTouchData: LineTouchData(
           touchTooltipData: LineTouchTooltipData(
             getTooltipColor: (_) => const Color(0xFF0F172A),
+            getTooltipItems: (touchedSpots) {
+              return touchedSpots.map((spot) {
+                if (spot.barIndex >= history.length) return null;
+                final run = history[spot.barIndex];
+                return LineTooltipItem(
+                  '${run.modelName} (${run.backendType})\n${spot.y.toStringAsFixed(1)} FPS',
+                  TextStyle(color: _getRunColor(run), fontSize: 10, fontWeight: FontWeight.bold),
+                );
+              }).toList();
+            },
           ),
         ),
         titlesData: FlTitlesData(
@@ -292,10 +368,9 @@ class _LineChartTab extends StatelessWidget {
 // ── Pie Chart ─────────────────────────────────────────────────────────────────
 
 class _PieChartTab extends StatefulWidget {
-  final ModelBenchmarkData? nanoData;
-  final ModelBenchmarkData? smallData;
+  final List<ModelBenchmarkData> history;
 
-  const _PieChartTab({required this.nanoData, required this.smallData});
+  const _PieChartTab({required this.history});
 
   @override
   State<_PieChartTab> createState() => _PieChartTabState();
@@ -306,42 +381,32 @@ class _PieChartTabState extends State<_PieChartTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.nanoData == null && widget.smallData == null) {
+    if (widget.history.isEmpty) {
       return _NoDataPlaceholder();
     }
 
-    // Show relative metric distribution across models for available data
-    // Pie = FPS proportion for each model (share of total combined FPS)
-    final nFps = widget.nanoData?.averageFps ?? 0.0;
-    final sFps = widget.smallData?.averageFps ?? 0.0;
-    final total = nFps + sFps;
-    final hasTotal = total > 0;
+    final totalFps = widget.history.map((e) => e.averageFps).fold(0.0, (a, b) => a + b);
+    final hasTotal = totalFps > 0;
 
     final sections = <PieChartSectionData>[];
 
-    if (widget.nanoData != null && hasTotal) {
+    for (int i = 0; i < widget.history.length; i++) {
+      final run = widget.history[i];
+      final fps = run.averageFps;
+      final pct = hasTotal ? (fps / totalFps * 100) : 0.0;
+      
       sections.add(PieChartSectionData(
-        value: nFps,
-        title: 'n: ${(nFps / total * 100).toStringAsFixed(0)}%',
-        color: _nanoColor,
-        radius: _touchedIndex == 0 ? 90 : 75,
-        titleStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
-      ));
-    }
-
-    if (widget.smallData != null && hasTotal) {
-      sections.add(PieChartSectionData(
-        value: sFps,
-        title: 's: ${(sFps / total * 100).toStringAsFixed(0)}%',
-        color: _smallColor,
-        radius: _touchedIndex == 1 ? 90 : 75,
-        titleStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+        value: fps,
+        title: '${run.modelName.replaceAll('YOLOv8', '')} (${run.backendType})\n${pct.toStringAsFixed(0)}%',
+        color: _getRunColor(run),
+        radius: _touchedIndex == i ? 85 : 70,
+        titleStyle: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.white),
       ));
     }
 
     return Column(
       children: [
-        const Text('FPS Share — YOLOv8n vs YOLOv8s',
+        const Text('FPS Distribution by Run',
             style: TextStyle(color: Colors.white60, fontSize: 11)),
         const SizedBox(height: 8),
         Expanded(
@@ -361,16 +426,11 @@ class _PieChartTabState extends State<_PieChartTab> {
                   });
                 },
               ),
-              sectionsSpace: 3,
-              centerSpaceRadius: 55,
+              sectionsSpace: 2,
+              centerSpaceRadius: 45,
               sections: sections,
             ),
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'n=${nFps.toStringAsFixed(1)} fps  |  s=${sFps.toStringAsFixed(1)} fps',
-          style: const TextStyle(color: Colors.white54, fontSize: 10),
         ),
       ],
     );
@@ -380,23 +440,14 @@ class _PieChartTabState extends State<_PieChartTab> {
 // ── Radar Chart ───────────────────────────────────────────────────────────────
 
 class _RadarChartTab extends StatelessWidget {
-  final ModelBenchmarkData? nanoData;
-  final ModelBenchmarkData? smallData;
+  final List<ModelBenchmarkData> history;
 
-  const _RadarChartTab({required this.nanoData, required this.smallData});
+  const _RadarChartTab({required this.history});
 
-  /// Normalize metrics to 0–10 scale for radar.
-  List<RadarEntry> _entries(ModelBenchmarkData? data) {
-    if (data == null) {
-      return List.generate(4, (_) => const RadarEntry(value: 0));
-    }
-    // Speed: avg FPS, capped at 30 FPS = 10
+  List<RadarEntry> _entries(ModelBenchmarkData data) {
     final speed = (data.averageFps / 30 * 10).clamp(0.0, 10.0);
-    // Accuracy: detection success rate * 10
     final accuracy = (data.detectionSuccessRate * 10).clamp(0.0, 10.0);
-    // Memory efficiency: inverse RAM usage (512 MB = worst)
     final memory = ((1 - (data.averageRam / 512).clamp(0.0, 1.0)) * 10);
-    // Stability: FPS stability * 10
     final stability = (data.fpsStability * 10).clamp(0.0, 10.0);
     return [
       RadarEntry(value: speed),
@@ -408,27 +459,17 @@ class _RadarChartTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (nanoData == null && smallData == null) return _NoDataPlaceholder();
+    if (history.isEmpty) return _NoDataPlaceholder();
 
     final dataSets = <RadarDataSet>[];
 
-    if (nanoData != null) {
+    for (final run in history) {
       dataSets.add(RadarDataSet(
-        fillColor: _nanoColor.withValues(alpha: 0.18),
-        borderColor: _nanoColor,
-        entryRadius: 4,
-        borderWidth: 2,
-        dataEntries: _entries(nanoData),
-      ));
-    }
-
-    if (smallData != null) {
-      dataSets.add(RadarDataSet(
-        fillColor: _smallColor.withValues(alpha: 0.18),
-        borderColor: _smallColor,
-        entryRadius: 4,
-        borderWidth: 2,
-        dataEntries: _entries(smallData),
+        fillColor: _getRunColor(run).withValues(alpha: 0.12),
+        borderColor: _getRunColor(run),
+        entryRadius: 3,
+        borderWidth: 1.5,
+        dataEntries: _entries(run),
       ));
     }
 
@@ -469,7 +510,7 @@ class _NoDataPlaceholder extends StatelessWidget {
           Icon(Icons.bar_chart_rounded, color: Colors.white24, size: 48),
           SizedBox(height: 10),
           Text(
-            'Belum ada data benchmark.\nJalankan deteksi terlebih dahulu.',
+            'Belum ada data benchmark untuk filter ini.\nJalankan deteksi terlebih dahulu.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.white38, fontSize: 13),
           ),
@@ -487,11 +528,14 @@ class _LegendItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      Container(width: 12, height: 12, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-      const SizedBox(width: 6),
-      Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
-    ]);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 5),
+        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 10)),
+      ],
+    );
   }
 }
 

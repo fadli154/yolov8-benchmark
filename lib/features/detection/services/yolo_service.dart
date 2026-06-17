@@ -16,7 +16,11 @@ class YoloService {
   bool _isModelLoaded = false;
   bool _isInferring = false;
   bool _isDisposed = false;
+  // ignore: unused_field – kept for debug traceability only
   String? _currentModelPath;
+
+  String activeBackendType = 'CPU';
+  String activeBackendStatus = 'CPU active';
 
   /// True after [loadModel] succeeds.
   bool get isModelLoaded => _isModelLoaded;
@@ -34,27 +38,35 @@ class YoloService {
   // ── Public API ────────────────────────────────────────────────────────────
 
   /// Load a YOLO TFLite model. Safe to call even if a model is already loaded.
-  Future<void> loadModel(String modelPath) async {
+  Future<void> loadModel(String modelPath, {String backend = 'CPU'}) async {
     if (_isDisposed) return;
-    if (_currentModelPath == modelPath && _isModelLoaded) return;
-
+    
+    // Rebuild interpreter if model path OR backend changes
+    // (So we don't return early if user just changes backend for same model)
     await _closeModel();
 
-    debugPrint('[YoloService] Loading model: $modelPath');
+    debugPrint('[YoloService] Loading model: $modelPath with backend: $backend');
     try {
-      await _vision.loadYoloModel(
+      final res = await _vision.loadYoloModel(
         labels: 'assets/models/labels.txt',
         modelPath: modelPath,
         modelVersion: 'yolov8',
         numThreads: 4,
-        useGpu: false,
+        useGpu: backend == 'GPU',
+        backend: backend,
       );
       _currentModelPath = modelPath;
       _isModelLoaded = true;
-      debugPrint('[YoloService] Model loaded: $modelPath');
+      
+      activeBackendType = res['activeBackend']?.toString() ?? 'CPU';
+      activeBackendStatus = res['activeBackendStatus']?.toString() ?? 'CPU active';
+      
+      debugPrint('[YoloService] Model loaded: $modelPath. Active backend: $activeBackendStatus');
     } catch (e) {
       _isModelLoaded = false;
       _currentModelPath = null;
+      activeBackendType = 'CPU';
+      activeBackendStatus = 'CPU active (load error fallback)';
       debugPrint('[YoloService] Model load error: $e');
       rethrow;
     }
@@ -68,11 +80,10 @@ class YoloService {
   /// 5. GC hint delay
   /// 6. Load new model
   /// 7. Ready
-  Future<void> switchModel(String newModelPath) async {
+  Future<void> switchModel(String newModelPath, {String backend = 'CPU'}) async {
     if (_isDisposed) return;
-    if (newModelPath == _currentModelPath && _isModelLoaded) return;
 
-    debugPrint('[YoloService] Switching to $newModelPath');
+    debugPrint('[YoloService] Switching to $newModelPath with backend $backend');
 
     // Step 1-2: Wait for any in-flight inference (max 1s)
     await _waitForInference(timeoutMs: 1000);
@@ -86,7 +97,7 @@ class YoloService {
     await Future.delayed(const Duration(milliseconds: 300));
 
     // Step 6-7: Load new model
-    await loadModel(newModelPath);
+    await loadModel(newModelPath, backend: backend);
   }
 
   /// Process one camera frame. Returns detection results or null if skipped/busy.

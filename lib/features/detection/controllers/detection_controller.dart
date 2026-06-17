@@ -40,6 +40,10 @@ class DetectionController extends GetxController {
   final currentLatency = 0.0.obs;
   final currentRam = 0.0.obs;
 
+  final selectedBackend = 'CPU'.obs;
+  final activeBackendType = 'CPU'.obs;
+  final activeBackendStatus = 'CPU active'.obs;
+
   // Card expand/collapse — targeted Obx avoids full-tree rebuilds
   final topCardExpanded = true.obs;
   final controlCardExpanded = true.obs;
@@ -94,7 +98,9 @@ class DetectionController extends GetxController {
     try {
       await _tts.initialize(speechRate: speechRate.value);
       await _camera.initialize();
-      await _yolo.loadModel(modelPath);
+      await _yolo.loadModel(modelPath, backend: selectedBackend.value);
+      activeBackendType.value = _yolo.activeBackendType;
+      activeBackendStatus.value = _yolo.activeBackendStatus;
       _benchmark.startSession();
       _startRamPolling();
       isLoaded.value = true;
@@ -193,15 +199,58 @@ class DetectionController extends GetxController {
 
     try {
       // 4. Safe 7-step model switch (YoloService handles steps 4-7)
-      await _yolo.switchModel(newPath);
+      await _yolo.switchModel(newPath, backend: selectedBackend.value);
       currentModelType.value = newType;
       _yolo.frameSkip = newType == 'nano' ? 1 : 2;
+      activeBackendType.value = _yolo.activeBackendType;
+      activeBackendStatus.value = _yolo.activeBackendStatus;
 
       // 5. Start new benchmark session
       _benchmark.startSession();
       _benchmark.resetSessionTimer();
     } catch (e) {
       debugPrint('[DetectionController] switchModel error: $e');
+    }
+
+    isSwitchingModel.value = false;
+
+    if (!_cleanupDone) {
+      await startRealtime();
+    }
+  }
+
+  Future<void> changeBackend(String backend) async {
+    if (isSwitchingModel.value || _cleanupDone) return;
+    if (selectedBackend.value == backend) return;
+
+    selectedBackend.value = backend;
+    isSwitchingModel.value = true;
+
+    // 1. Save current session before switch
+    await _saveSession();
+
+    // 2. Stop stream
+    isRealtime.value = false;
+    await _camera.stopImageStream();
+
+    // 3. Reset display state
+    yoloResults.value = [];
+    currentFps.value = 0.0;
+    currentLatency.value = 0.0;
+    _inferenceCount = 0;
+    _fpsWindowStart = null;
+
+    try {
+      // Rebuild interpreter with same model but different backend
+      await _yolo.loadModel(modelPath, backend: backend);
+      activeBackendType.value = _yolo.activeBackendType;
+      activeBackendStatus.value = _yolo.activeBackendStatus;
+
+      // 5. Start new benchmark session
+      _benchmark.startSession();
+      _benchmark.resetSessionTimer();
+    } catch (e) {
+      debugPrint('[DetectionController] changeBackend error: $e');
     }
 
     isSwitchingModel.value = false;
@@ -230,6 +279,8 @@ class DetectionController extends GetxController {
     await _benchmark.saveSession(
       modelName: modelDisplayName,
       modelSizeMb: sizeMb,
+      backendType: activeBackendType.value,
+      backendStatus: activeBackendStatus.value,
     );
   }
 

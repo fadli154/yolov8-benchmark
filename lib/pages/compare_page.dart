@@ -4,7 +4,15 @@ import 'package:google_fonts/google_fonts.dart';
 import '../features/detection/services/benchmark_service.dart';
 import '../features/detection/widgets/benchmark_chart.dart';
 import '../models/benchmark.dart';
-import '../widgets/metric_card.dart';
+import '../services/statistics_service.dart';
+import '../widgets/aggregated_summary_card.dart';
+import '../widgets/conclusion_card.dart';
+import '../widgets/metric_stat_card.dart';
+import '../widgets/run_history_card.dart';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ComparePage — 5-Tab Benchmark Comparison Dashboard
+// ═══════════════════════════════════════════════════════════════════════════════
 
 class ComparePage extends StatefulWidget {
   const ComparePage({super.key});
@@ -18,8 +26,9 @@ class _ComparePageState extends State<ComparePage>
   late TabController _tabController;
   late DetectionBenchmarkService _svc;
 
-  ModelBenchmarkData? _nanoData;
-  ModelBenchmarkData? _smallData;
+  List<ModelBenchmarkData> _history = [];
+  List<BenchmarkRun> _runs = [];
+  Map<String, BenchmarkAggregated> _aggregated = {};
 
   bool _exportingPdf = false;
   bool _exportingCsv = false;
@@ -27,10 +36,17 @@ class _ComparePageState extends State<ComparePage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _svc = Get.find<DetectionBenchmarkService>();
-    _nanoData = _svc.nanoData;
-    _smallData = _svc.smallData;
+    _refresh();
+  }
+
+  void _refresh() {
+    setState(() {
+      _history = List.from(_svc.history);
+      _runs = List.from(_svc.runs);
+      _aggregated = _svc.aggregatedResults;
+    });
   }
 
   @override
@@ -44,370 +60,882 @@ class _ComparePageState extends State<ComparePage>
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Reset Benchmarks?',
-            style: TextStyle(color: Colors.white)),
-        content: const Text(
-          'Semua data benchmark session saat ini akan dihapus.',
-          style: TextStyle(color: Colors.white70),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Reset All Data?',
+            style: GoogleFonts.outfit(
+                color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text(
+          'All benchmark runs, sessions, and aggregated statistics will be permanently deleted.',
+          style: GoogleFonts.inter(color: Colors.white60, fontSize: 13),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Batal',
-                  style: TextStyle(color: Colors.white60))),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white38)),
+          ),
           TextButton(
-              onPressed: () {
-                _svc.reset();
-                setState(() {
-                  _nanoData = null;
-                  _smallData = null;
-                });
-                Navigator.pop(context);
-              },
-              child: const Text('Reset',
-                  style: TextStyle(color: Color(0xFF10B981)))),
+            onPressed: () {
+              _svc.reset();
+              Navigator.pop(context);
+              _refresh();
+            },
+            child: const Text('Reset',
+                style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold)),
+          ),
         ],
       ),
     );
   }
 
+  bool get _hasAnyData => _runs.isNotEmpty || _history.isNotEmpty;
+
   @override
   Widget build(BuildContext context) {
-    final hasData = _nanoData != null || _smallData != null;
-
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
       appBar: AppBar(
         backgroundColor: const Color(0xFF0F172A),
         foregroundColor: Colors.white,
-        title: Text('Benchmark Comparison',
+        title: Text('Benchmark Results',
             style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        actions: [
+          if (_hasAnyData)
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded, size: 20),
+              onPressed: _refresh,
+              tooltip: 'Refresh',
+            ),
+          if (_hasAnyData)
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded, size: 20),
+              onPressed: _reset,
+              tooltip: 'Reset all data',
+            ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: const Color(0xFF10B981),
-          unselectedLabelColor: Colors.white54,
+          unselectedLabelColor: Colors.white38,
           indicatorColor: const Color(0xFF10B981),
+          indicatorSize: TabBarIndicatorSize.tab,
+          labelStyle:
+              const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+          unselectedLabelStyle: const TextStyle(fontSize: 10),
+          isScrollable: false,
           tabs: const [
-            Tab(icon: Icon(Icons.table_chart_rounded), text: 'Tabel'),
-            Tab(icon: Icon(Icons.bar_chart_rounded), text: 'Charts'),
-            Tab(icon: Icon(Icons.download_rounded), text: 'Export'),
+            Tab(icon: Icon(Icons.dashboard_rounded, size: 18), text: 'Summary'),
+            Tab(icon: Icon(Icons.analytics_rounded, size: 18), text: 'Stats'),
+            Tab(icon: Icon(Icons.history_rounded, size: 18), text: 'History'),
+            Tab(icon: Icon(Icons.bar_chart_rounded, size: 18), text: 'Charts'),
+            Tab(icon: Icon(Icons.download_rounded, size: 18), text: 'Export'),
           ],
         ),
-        actions: [
-          if (hasData)
-            IconButton(
-              icon: const Icon(Icons.delete_outline_rounded),
-              onPressed: _reset,
-              tooltip: 'Reset benchmark data',
-            ),
-        ],
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          // ── Tab 1: Stats Table ──────────────────────────────────
-          _StatsTab(nanoData: _nanoData, smallData: _smallData),
-          // ── Tab 2: Charts ───────────────────────────────────────
-          SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(children: [
-              BenchmarkChartWidget(
-                  nanoData: _nanoData, smallData: _smallData),
-              const SizedBox(height: 24),
-              _ConclusionBox(nanoData: _nanoData, smallData: _smallData),
-            ]),
-          ),
-          // ── Tab 3: Export ───────────────────────────────────────
+          // Tab 1 — Summary
+          _SummaryTab(
+              aggregated: _aggregated,
+              runs: _runs,
+              history: _history),
+          // Tab 2 — Statistics table
+          _StatisticsTab(aggregated: _aggregated, runs: _runs),
+          // Tab 3 — Run History
+          _HistoryTab(runs: _runs, history: _history),
+          // Tab 4 — Charts
+          _ChartsTab(history: _history),
+          // Tab 5 — Export
           _ExportTab(
-            hasData: hasData,
+            hasData: _hasAnyData,
             exportingPdf: _exportingPdf,
             exportingCsv: _exportingCsv,
-            onExportPdf: _handlePdfExport,
-            onExportCsv: _handleCsvExport,
+            onExportPdf: () async {
+              setState(() => _exportingPdf = true);
+              await _svc.exportPdf();
+              if (mounted) setState(() => _exportingPdf = false);
+            },
+            onExportCsv: () async {
+              setState(() => _exportingCsv = true);
+              await _svc.exportCsv();
+              if (mounted) setState(() => _exportingCsv = false);
+            },
           ),
         ],
       ),
     );
   }
-
-  Future<void> _handlePdfExport() async {
-    setState(() => _exportingPdf = true);
-    await _svc.exportPdf();
-    if (mounted) setState(() => _exportingPdf = false);
-  }
-
-  Future<void> _handleCsvExport() async {
-    setState(() => _exportingCsv = true);
-    await _svc.exportCsv();
-    if (mounted) setState(() => _exportingCsv = false);
-  }
 }
 
-// ── Stats Table Tab ───────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Tab 1 — Summary
+// ═══════════════════════════════════════════════════════════════════════════════
 
-class _StatsTab extends StatelessWidget {
-  final ModelBenchmarkData? nanoData;
-  final ModelBenchmarkData? smallData;
+class _SummaryTab extends StatelessWidget {
+  final Map<String, BenchmarkAggregated> aggregated;
+  final List<BenchmarkRun> runs;
+  final List<ModelBenchmarkData> history;
 
-  const _StatsTab({required this.nanoData, required this.smallData});
+  const _SummaryTab({
+    required this.aggregated,
+    required this.runs,
+    required this.history,
+  });
 
   @override
   Widget build(BuildContext context) {
+    if (aggregated.isEmpty && history.isEmpty) {
+      return _EmptyState(
+        icon: Icons.dashboard_rounded,
+        title: 'No benchmark data yet',
+        subtitle:
+            'Tap "Run Benchmark" on the home screen to start a timed session.',
+      );
+    }
+
+    final fastest = StatisticsService.fastestCombo(aggregated);
+    final lowLat = StatisticsService.lowestLatencyCombo(aggregated);
+    final lowRam = StatisticsService.lowestRamCombo(aggregated);
+
+    // Group aggregated by model
+    final nanoEntries = aggregated.values
+        .where((a) => a.modelName.toLowerCase().contains('8n'))
+        .toList()
+      ..sort((a, b) => a.backendType.compareTo(b.backendType));
+    final smallEntries = aggregated.values
+        .where((a) => !a.modelName.toLowerCase().contains('8n'))
+        .toList()
+      ..sort((a, b) => a.backendType.compareTo(b.backendType));
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _sectionTitle('Performance Metrics'),
-        const SizedBox(height: 12),
-        _buildTable(),
-        const SizedBox(height: 24),
-        _sectionTitle('Session Highlights'),
-        const SizedBox(height: 12),
-        if (nanoData != null) ...[
-          MetricCard(
-            title: 'YOLOv8n — Avg FPS',
-            value: '${nanoData!.averageFps.toStringAsFixed(1)} fps',
-            subtitle: 'Min: ${nanoData!.minFps.toStringAsFixed(1)}  Max: ${nanoData!.maxFps.toStringAsFixed(1)}',
-            icon: Icons.speed_rounded,
-          ),
-          const SizedBox(height: 10),
-          MetricCard(
-            title: 'YOLOv8n — Avg Latency',
-            value: '${nanoData!.averageLatency.toStringAsFixed(0)} ms',
-            subtitle: 'Min: ${nanoData!.minLatency.toStringAsFixed(0)} ms  Max: ${nanoData!.maxLatency.toStringAsFixed(0)} ms',
-            icon: Icons.timer_rounded,
-            color: Colors.amber,
-          ),
-          const SizedBox(height: 10),
-          MetricCard(
-            title: 'YOLOv8n — Peak RAM',
-            value: '${nanoData!.peakRam.toStringAsFixed(0)} MB',
-            subtitle: 'Avg: ${nanoData!.averageRam.toStringAsFixed(0)} MB · Size: ${nanoData!.modelSizeMb.toStringAsFixed(1)} MB',
-            icon: Icons.memory_rounded,
-            color: Colors.blueAccent,
-          ),
-          const SizedBox(height: 18),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Quick stats row
+          if (runs.isNotEmpty) ...[
+            _QuickStatsRow(runs: runs, aggregated: aggregated),
+            const SizedBox(height: 20),
+          ],
+
+          // YOLOv8n section
+          if (nanoEntries.isNotEmpty) ...[
+            _SectionHeader(
+              icon: Icons.bolt_rounded,
+              color: const Color(0xFF10B981),
+              title: 'YOLOv8n (Nano)',
+              subtitle: '${nanoEntries.fold(0, (s, a) => s + a.runCount)} total runs',
+            ),
+            const SizedBox(height: 10),
+            ...nanoEntries.map((agg) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: AggregatedSummaryCard(
+                    agg: agg,
+                    isFastest: fastest?.groupKey == agg.groupKey,
+                    isLowestLatency: lowLat?.groupKey == agg.groupKey,
+                    isLowestRam: lowRam?.groupKey == agg.groupKey,
+                  ),
+                )),
+            const SizedBox(height: 12),
+          ],
+
+          // YOLOv8s section
+          if (smallEntries.isNotEmpty) ...[
+            _SectionHeader(
+              icon: Icons.auto_awesome_rounded,
+              color: const Color(0xFF6366F1),
+              title: 'YOLOv8s (Small)',
+              subtitle: '${smallEntries.fold(0, (s, a) => s + a.runCount)} total runs',
+            ),
+            const SizedBox(height: 10),
+            ...smallEntries.map((agg) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: AggregatedSummaryCard(
+                    agg: agg,
+                    isFastest: fastest?.groupKey == agg.groupKey,
+                    isLowestLatency: lowLat?.groupKey == agg.groupKey,
+                    isLowestRam: lowRam?.groupKey == agg.groupKey,
+                  ),
+                )),
+            const SizedBox(height: 12),
+          ],
+
+          // Legacy passive sessions (if no runs yet)
+          if (runs.isEmpty && history.isNotEmpty) ...[
+            _SectionHeader(
+              icon: Icons.history_rounded,
+              color: Colors.white38,
+              title: 'Detection Sessions',
+              subtitle: '${history.length} session(s)',
+            ),
+            const SizedBox(height: 10),
+            ...history.map((data) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _LegacySessionCard(data: data),
+                )),
+            const SizedBox(height: 12),
+          ],
+
+          // Conclusion card
+          ConclusionCard(aggregated: aggregated),
+          const SizedBox(height: 16),
         ],
-        if (smallData != null) ...[
-          MetricCard(
-            title: 'YOLOv8s — Avg FPS',
-            value: '${smallData!.averageFps.toStringAsFixed(1)} fps',
-            subtitle: 'Min: ${smallData!.minFps.toStringAsFixed(1)}  Max: ${smallData!.maxFps.toStringAsFixed(1)}',
-            icon: Icons.speed_rounded,
-            color: const Color(0xFF6366F1),
-          ),
-          const SizedBox(height: 10),
-          MetricCard(
-            title: 'YOLOv8s — Avg Latency',
-            value: '${smallData!.averageLatency.toStringAsFixed(0)} ms',
-            subtitle: 'Min: ${smallData!.minLatency.toStringAsFixed(0)} ms  Max: ${smallData!.maxLatency.toStringAsFixed(0)} ms',
-            icon: Icons.timer_rounded,
-            color: Colors.deepOrange,
-          ),
-          const SizedBox(height: 10),
-          MetricCard(
-            title: 'YOLOv8s — Peak RAM',
-            value: '${smallData!.peakRam.toStringAsFixed(0)} MB',
-            subtitle: 'Avg: ${smallData!.averageRam.toStringAsFixed(0)} MB · Size: ${smallData!.modelSizeMb.toStringAsFixed(1)} MB',
-            icon: Icons.memory_rounded,
-            color: Colors.purpleAccent,
-          ),
+      ),
+    );
+  }
+}
+
+class _QuickStatsRow extends StatelessWidget {
+  final List<BenchmarkRun> runs;
+  final Map<String, BenchmarkAggregated> aggregated;
+
+  const _QuickStatsRow({required this.runs, required this.aggregated});
+
+  @override
+  Widget build(BuildContext context) {
+    final combos = aggregated.length;
+    final totalRuns = runs.length;
+    final bestFps = aggregated.isEmpty
+        ? 0.0
+        : aggregated.values.map((a) => a.meanFps).reduce((a, b) => a > b ? a : b);
+
+    return Row(
+      children: [
+        Expanded(
+            child: _QuickStat('Combos Tested', '$combos',
+                const Color(0xFF10B981), Icons.compare_arrows_rounded)),
+        const SizedBox(width: 8),
+        Expanded(
+            child: _QuickStat('Total Runs', '$totalRuns',
+                const Color(0xFF3B82F6), Icons.repeat_rounded)),
+        const SizedBox(width: 8),
+        Expanded(
+            child: _QuickStat('Best FPS',
+                bestFps > 0 ? bestFps.toStringAsFixed(1) : '--',
+                const Color(0xFFF59E0B), Icons.speed_rounded)),
+      ],
+    );
+  }
+}
+
+class _QuickStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  final IconData icon;
+
+  const _QuickStat(this.label, this.value, this.color, this.icon);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(height: 4),
+          Text(value,
+              style: GoogleFonts.outfit(
+                  color: color, fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(label,
+              style: const TextStyle(color: Colors.white38, fontSize: 9),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
         ],
-        if (nanoData == null && smallData == null)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 60),
-              child: Column(children: [
-                const Icon(Icons.hourglass_empty_rounded,
-                    color: Colors.white24, size: 48),
-                const SizedBox(height: 12),
-                Text(
-                  'Belum ada data.\nKembali ke Home dan jalankan deteksi.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
-                      color: Colors.white38, fontSize: 14, height: 1.6),
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+
+  const _SectionHeader({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: color, size: 18),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold)),
+              Text(subtitle,
+                  style: const TextStyle(color: Colors.white38, fontSize: 11)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LegacySessionCard extends StatelessWidget {
+  final ModelBenchmarkData data;
+
+  const _LegacySessionCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final isNano = data.modelName.toLowerCase().contains('8n');
+    final color =
+        isNano ? const Color(0xFF10B981) : const Color(0xFF6366F1);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(isNano ? Icons.bolt_rounded : Icons.auto_awesome_rounded,
+                  color: color, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${data.modelName} (${data.backendType})',
+                  style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ]),
+              ),
+              Text(
+                data.benchmarkTimestamp.toString().substring(5, 16),
+                style: const TextStyle(color: Colors.white38, fontSize: 10),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _MiniStat('FPS', data.averageFps.toStringAsFixed(1), color),
+              _MiniStat('Latency',
+                  '${data.averageLatency.toStringAsFixed(0)} ms', Colors.white70),
+              _MiniStat('Peak RAM',
+                  '${data.peakRam.toStringAsFixed(0)} MB', Colors.white70),
+              _MiniStat('Success',
+                  '${(data.detectionSuccessRate * 100).toStringAsFixed(0)}%',
+                  Colors.white70),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            data.backendStatus,
+            style: TextStyle(
+              color: data.backendStatus.toLowerCase().contains('active')
+                  ? const Color(0xFF10B981)
+                  : Colors.amber,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _MiniStat(this.label, this.value, this.color);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(label,
+            style: const TextStyle(color: Colors.white38, fontSize: 9)),
+        const SizedBox(height: 2),
+        Text(value,
+            style: TextStyle(
+                color: color, fontSize: 12, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Tab 2 — Statistics
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _StatisticsTab extends StatelessWidget {
+  final Map<String, BenchmarkAggregated> aggregated;
+  final List<BenchmarkRun> runs;
+
+  const _StatisticsTab({required this.aggregated, required this.runs});
+
+  @override
+  Widget build(BuildContext context) {
+    if (aggregated.isEmpty) {
+      return _EmptyState(
+        icon: Icons.analytics_rounded,
+        title: 'No statistics available',
+        subtitle: 'Complete at least 1 benchmark run to see statistics.',
+      );
+    }
+
+    final fastest = StatisticsService.fastestCombo(aggregated);
+    final lowLat = StatisticsService.lowestLatencyCombo(aggregated);
+    final lowRam = StatisticsService.lowestRamCombo(aggregated);
+    final stable = StatisticsService.mostStableCombo(aggregated);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // FPS stats grid
+          _StatsSection(
+            title: 'FPS Statistics',
+            icon: Icons.speed_rounded,
+            color: const Color(0xFF10B981),
+            children: aggregated.values.map((agg) {
+              return MetricStatCard(
+                label: '${agg.modelName}\n${agg.backendType}',
+                meanStdValue: agg.fpsLabel(),
+                unit: 'fps  •  ${agg.runCount} run(s)',
+                minValue: agg.minFps.toStringAsFixed(1),
+                maxValue: agg.maxFps.toStringAsFixed(1),
+                accentColor: const Color(0xFF10B981),
+                icon: Icons.speed_rounded,
+                isBest: fastest?.groupKey == agg.groupKey,
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 20),
+
+          // Latency stats grid
+          _StatsSection(
+            title: 'Latency Statistics',
+            icon: Icons.timer_rounded,
+            color: const Color(0xFF3B82F6),
+            children: aggregated.values.map((agg) {
+              return MetricStatCard(
+                label: '${agg.modelName}\n${agg.backendType}',
+                meanStdValue: agg.latencyLabel(),
+                unit: 'ms',
+                minValue: '${agg.minLatency.toStringAsFixed(1)} ms',
+                maxValue: '${agg.maxLatency.toStringAsFixed(1)} ms',
+                accentColor: const Color(0xFF3B82F6),
+                icon: Icons.timer_rounded,
+                isBest: lowLat?.groupKey == agg.groupKey,
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 20),
+
+          // RAM stats grid
+          _StatsSection(
+            title: 'RAM Usage Statistics',
+            icon: Icons.memory_rounded,
+            color: const Color(0xFFF59E0B),
+            children: aggregated.values.map((agg) {
+              return MetricStatCard(
+                label: '${agg.modelName}\n${agg.backendType}',
+                meanStdValue: agg.ramLabel(),
+                unit: 'MB  •  Peak: ${agg.peakRam.toStringAsFixed(0)} MB',
+                accentColor: const Color(0xFFF59E0B),
+                icon: Icons.memory_rounded,
+                isBest: lowRam?.groupKey == agg.groupKey,
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 20),
+
+          // Stability stats grid
+          _StatsSection(
+            title: 'FPS Stability',
+            icon: Icons.show_chart_rounded,
+            color: const Color(0xFF8B5CF6),
+            children: aggregated.values.map((agg) {
+              return MetricStatCard(
+                label: '${agg.modelName}\n${agg.backendType}',
+                meanStdValue:
+                    '${(agg.meanFpsStability * 100).toStringAsFixed(1)}%',
+                unit: 'CV: ${agg.cvFps.toStringAsFixed(1)}%  •  ${agg.runCount} run(s)',
+                accentColor: const Color(0xFF8B5CF6),
+                icon: Icons.show_chart_rounded,
+                isBest: stable?.groupKey == agg.groupKey,
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 20),
+
+          // Full comparison table (scrollable)
+          _FullStatsTable(aggregated: aggregated),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatsSection extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Color color;
+  final List<Widget> children;
+
+  const _StatsSection({
+    required this.title,
+    required this.icon,
+    required this.color,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 6),
+          Text(title,
+              style: GoogleFonts.outfit(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold)),
+        ]),
+        const SizedBox(height: 10),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
+          childAspectRatio: 1.5,
+          children: children,
+        ),
+      ],
+    );
+  }
+}
+
+class _FullStatsTable extends StatelessWidget {
+  final Map<String, BenchmarkAggregated> aggregated;
+
+  const _FullStatsTable({required this.aggregated});
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = aggregated.values.toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Full Comparison Table',
+            style: GoogleFonts.outfit(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Text('Mean ± Std (per model × backend combination)',
+            style: const TextStyle(color: Colors.white38, fontSize: 11)),
+        const SizedBox(height: 10),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(12),
+              border:
+                  Border.all(color: Colors.white.withValues(alpha: 0.06)),
+            ),
+            child: DataTable(
+              headingRowColor: WidgetStateProperty.all(
+                  const Color(0xFF0F172A)),
+              dataRowColor: WidgetStateProperty.resolveWith((states) =>
+                  states.contains(WidgetState.selected)
+                      ? const Color(0xFF10B981).withValues(alpha: 0.08)
+                      : null),
+              columnSpacing: 20,
+              horizontalMargin: 14,
+              headingTextStyle: GoogleFonts.inter(
+                  color: Colors.white60,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold),
+              dataTextStyle: GoogleFonts.inter(
+                  color: Colors.white70, fontSize: 10),
+              columns: const [
+                DataColumn(label: Text('Model')),
+                DataColumn(label: Text('Backend')),
+                DataColumn(label: Text('Runs'), numeric: true),
+                DataColumn(label: Text('FPS (μ±σ)')),
+                DataColumn(label: Text('CV%'), numeric: true),
+                DataColumn(label: Text('Latency (μ±σ)')),
+                DataColumn(label: Text('RAM (μ±σ)')),
+                DataColumn(label: Text('Stability'), numeric: true),
+                DataColumn(label: Text('Success'), numeric: true),
+              ],
+              rows: entries.map((agg) {
+                return DataRow(cells: [
+                  DataCell(Text(
+                    agg.modelName.replaceAll('YOLOv8', 'v8'),
+                    overflow: TextOverflow.ellipsis,
+                  )),
+                  DataCell(_BackendChip(agg.backendType)),
+                  DataCell(Text('${agg.runCount}')),
+                  DataCell(Text(
+                      '${agg.meanFps.toStringAsFixed(1)}±${agg.stdFps.toStringAsFixed(1)}')),
+                  DataCell(Text('${agg.cvFps.toStringAsFixed(1)}%')),
+                  DataCell(Text(
+                      '${agg.meanLatency.toStringAsFixed(1)}±${agg.stdLatency.toStringAsFixed(1)}')),
+                  DataCell(Text(
+                      '${agg.meanRam.toStringAsFixed(0)}±${agg.stdRam.toStringAsFixed(0)}')),
+                  DataCell(Text(
+                      '${(agg.meanFpsStability * 100).toStringAsFixed(0)}%')),
+                  DataCell(Text(
+                      '${(agg.meanSuccessRate * 100).toStringAsFixed(0)}%')),
+                ]);
+              }).toList(),
             ),
           ),
-      ]),
-    );
-  }
-
-  Widget _buildTable() {
-    final rows = [
-      _TableRow('Average FPS', nanoData?.averageFps, smallData?.averageFps, higherBetter: true),
-      _TableRow('Min FPS', nanoData?.minFps, smallData?.minFps, higherBetter: true),
-      _TableRow('Max FPS', nanoData?.maxFps, smallData?.maxFps, higherBetter: true),
-      _TableRow('Avg Latency (ms)', nanoData?.averageLatency, smallData?.averageLatency, higherBetter: false),
-      _TableRow('Min Latency (ms)', nanoData?.minLatency, smallData?.minLatency, higherBetter: false),
-      _TableRow('Max Latency (ms)', nanoData?.maxLatency, smallData?.maxLatency, higherBetter: false),
-      _TableRow('Avg RAM (MB)', nanoData?.averageRam, smallData?.averageRam, higherBetter: false),
-      _TableRow('Peak RAM (MB)', nanoData?.peakRam, smallData?.peakRam, higherBetter: false),
-      _TableRow('Model Size (MB)', nanoData?.modelSizeMb, smallData?.modelSizeMb, higherBetter: false),
-      _TableRow('Avg Objects', nanoData?.averageObjects, smallData?.averageObjects, higherBetter: true),
-      _TableRow('Success Rate (%)',
-          nanoData != null ? nanoData!.detectionSuccessRate * 100 : null,
-          smallData != null ? smallData!.detectionSuccessRate * 100 : null,
-          higherBetter: true),
-      _TableRow('FPS Stability (%)',
-          nanoData != null ? nanoData!.fpsStability * 100 : null,
-          smallData != null ? smallData!.fpsStability * 100 : null,
-          higherBetter: true),
-    ];
-
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-      ),
-      child: Table(
-        columnWidths: const {
-          0: FlexColumnWidth(1.6),
-          1: FlexColumnWidth(1),
-          2: FlexColumnWidth(1),
-        },
-        border: TableBorder.symmetric(
-          inside: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
         ),
-        children: [
-          // Header
-          TableRow(
-            decoration: const BoxDecoration(color: Color(0xFF0F172A)),
-            children: ['Metric', 'YOLOv8n', 'YOLOv8s']
-                .map((h) => _cell(h, header: true))
-                .toList(),
-          ),
-          ...rows.map((r) => TableRow(children: [
-                _cell(r.label, metricName: true),
-                _cell(_fmt(r.nanoVal, r.label), winner: r.nanoWins),
-                _cell(_fmt(r.smallVal, r.label), winner: r.smallWins),
-              ])),
-        ],
-      ),
+      ],
     );
-  }
-
-  String _fmt(double? v, String label) {
-    if (v == null) return 'N/A';
-    if (label.contains('%')) return '${v.toStringAsFixed(1)}%';
-    if (label.contains('ms') || label.contains('MB')) {
-      return v.toStringAsFixed(label.contains('MB') ? 1 : 0);
-    }
-    return v.toStringAsFixed(1);
-  }
-
-  Widget _cell(String text,
-      {bool header = false, bool metricName = false, bool winner = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      child: Text(
-        text,
-        textAlign: metricName ? TextAlign.left : TextAlign.center,
-        style: GoogleFonts.inter(
-          fontSize: 12,
-          fontWeight:
-              header || winner ? FontWeight.bold : FontWeight.normal,
-          color: header
-              ? Colors.white
-              : winner
-                  ? const Color(0xFF10B981)
-                  : metricName
-                      ? Colors.white.withValues(alpha: 0.9)
-                      : Colors.white.withValues(alpha: 0.6),
-        ),
-      ),
-    );
-  }
-
-  Widget _sectionTitle(String t) => Text(t,
-      style: GoogleFonts.outfit(
-          color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold));
-}
-
-class _TableRow {
-  final String label;
-  final double? nanoVal;
-  final double? smallVal;
-  final bool higherBetter;
-
-  _TableRow(this.label, this.nanoVal, this.smallVal,
-      {required this.higherBetter});
-
-  bool get nanoWins {
-    if (nanoVal == null || smallVal == null) return false;
-    return higherBetter ? nanoVal! > smallVal! : nanoVal! < smallVal!;
-  }
-
-  bool get smallWins {
-    if (nanoVal == null || smallVal == null) return false;
-    return higherBetter ? smallVal! > nanoVal! : smallVal! < nanoVal!;
   }
 }
 
-// ── Conclusion Box ────────────────────────────────────────────────────────────
+class _BackendChip extends StatelessWidget {
+  final String backend;
+  const _BackendChip(this.backend);
 
-class _ConclusionBox extends StatelessWidget {
-  final ModelBenchmarkData? nanoData;
-  final ModelBenchmarkData? smallData;
-
-  const _ConclusionBox({required this.nanoData, required this.smallData});
-
-  String _conclusion() {
-    if (nanoData == null && smallData == null) {
-      return 'Belum ada data benchmark. Jalankan deteksi dengan kedua model untuk mendapatkan perbandingan.';
+  Color get _color {
+    switch (backend.toUpperCase()) {
+      case 'GPU':
+        return const Color(0xFFF59E0B);
+      case 'NNAPI':
+        return const Color(0xFF8B5CF6);
+      default:
+        return const Color(0xFF64748B);
     }
-    if (nanoData == null) return 'Hanya data YOLOv8s tersedia. Jalankan YOLOv8n untuk perbandingan.';
-    if (smallData == null) return 'Hanya data YOLOv8n tersedia. Jalankan YOLOv8s untuk perbandingan.';
-
-    final faster = nanoData!.averageFps > smallData!.averageFps ? 'YOLOv8n' : 'YOLOv8s';
-    final moreAccurate = nanoData!.detectionSuccessRate > smallData!.detectionSuccessRate
-        ? 'YOLOv8n'
-        : 'YOLOv8s';
-
-    return '📊 $faster memiliki FPS lebih tinggi '
-        '(${nanoData!.averageFps.toStringAsFixed(1)} vs ${smallData!.averageFps.toStringAsFixed(1)} fps).\n\n'
-        '⚡ Latency — YOLOv8n: ${nanoData!.averageLatency.toStringAsFixed(0)} ms  |  '
-        'YOLOv8s: ${smallData!.averageLatency.toStringAsFixed(0)} ms.\n\n'
-        '💾 RAM — YOLOv8n: ${nanoData!.averageRam.toStringAsFixed(0)} MB  |  '
-        'YOLOv8s: ${smallData!.averageRam.toStringAsFixed(0)} MB.\n\n'
-        '🎯 $moreAccurate memiliki detection success rate lebih tinggi '
-        '(${(nanoData!.detectionSuccessRate * 100).toStringAsFixed(1)}% vs '
-        '${(smallData!.detectionSuccessRate * 100).toStringAsFixed(1)}%).\n\n'
-        '✅ Rekomendasi: YOLOv8n untuk perangkat mid-range (stabilitas & kecepatan). '
-        'YOLOv8s untuk flagship yang mengutamakan akurasi.';
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-            color: const Color(0xFF10B981).withValues(alpha: 0.2), width: 1),
+        color: _color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: _color.withValues(alpha: 0.3)),
       ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Icon(Icons.lightbulb_outline_rounded,
-            color: Color(0xFF10B981), size: 22),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            _conclusion(),
-            style: GoogleFonts.inter(
-                color: Colors.white.withValues(alpha: 0.88),
-                fontSize: 13,
-                height: 1.6),
-          ),
-        ),
-      ]),
+      child: Text(backend,
+          style: TextStyle(
+              color: _color, fontSize: 9, fontWeight: FontWeight.bold)),
     );
   }
 }
 
-// ── Export Tab ────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Tab 3 — Run History
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _HistoryTab extends StatelessWidget {
+  final List<BenchmarkRun> runs;
+  final List<ModelBenchmarkData> history;
+
+  const _HistoryTab({required this.runs, required this.history});
+
+  @override
+  Widget build(BuildContext context) {
+    if (runs.isEmpty && history.isEmpty) {
+      return _EmptyState(
+        icon: Icons.history_rounded,
+        title: 'No run history',
+        subtitle: 'Use "Run Benchmark" to start timed benchmark sessions.',
+      );
+    }
+
+    // Group runs by model+backend
+    final groups = StatisticsService.groupRunsByKey(runs);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (runs.isNotEmpty) ...[
+            Text(
+              '${runs.length} Benchmark Run(s)',
+              style: GoogleFonts.outfit(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Grouped by model + backend combination',
+              style: const TextStyle(color: Colors.white38, fontSize: 11),
+            ),
+            const SizedBox(height: 14),
+            ...groups.entries.map((entry) {
+              final groupRuns = entry.value
+                ..sort((a, b) => b.runIndex.compareTo(a.runIndex));
+              final first = groupRuns.first;
+              final isNano =
+                  first.modelName.toLowerCase().contains('8n');
+              final color = isNano
+                  ? const Color(0xFF10B981)
+                  : const Color(0xFF6366F1);
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Group header
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: color.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                            isNano
+                                ? Icons.bolt_rounded
+                                : Icons.auto_awesome_rounded,
+                            color: color,
+                            size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '${first.modelName} × ${first.backendType}',
+                            style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text(
+                          '${groupRuns.length} run(s)',
+                          style: TextStyle(
+                              color: color,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ...groupRuns.map((run) => RunHistoryCard(
+                        run: run,
+                        accentColor: color,
+                      )),
+                  const SizedBox(height: 8),
+                ],
+              );
+            }),
+          ],
+
+          // Legacy history section
+          if (history.isNotEmpty) ...[
+            if (runs.isNotEmpty) ...[
+              const Divider(color: Colors.white12, height: 32),
+              Text(
+                'Detection Sessions (Passive)',
+                style: GoogleFonts.outfit(
+                    color: Colors.white54,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Recorded during live detection (not timed runs)',
+                style: TextStyle(color: Colors.white24, fontSize: 10),
+              ),
+              const SizedBox(height: 10),
+            ],
+            ...history.reversed.map((data) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _LegacySessionCard(data: data),
+                )),
+          ],
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Tab 4 — Charts
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _ChartsTab extends StatelessWidget {
+  final List<ModelBenchmarkData> history;
+
+  const _ChartsTab({required this.history});
+
+  @override
+  Widget build(BuildContext context) {
+    if (history.isEmpty) {
+      return _EmptyState(
+        icon: Icons.bar_chart_rounded,
+        title: 'No chart data',
+        subtitle: 'Complete benchmark sessions to visualize performance.',
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          BenchmarkChartWidget(history: history),
+          const SizedBox(height: 24),
+          ConclusionCard(aggregated: {}),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Tab 5 — Export
+// ═══════════════════════════════════════════════════════════════════════════════
 
 class _ExportTab extends StatelessWidget {
   final bool hasData;
@@ -427,90 +955,131 @@ class _ExportTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Export Hasil Benchmark',
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Export Benchmark Data',
             style: GoogleFonts.outfit(
                 color: Colors.white,
                 fontSize: 20,
+                fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Export results for academic documentation and journal submission.',
+            style: GoogleFonts.inter(color: Colors.white54, fontSize: 12),
+          ),
+          const SizedBox(height: 24),
+
+          _ExportCard(
+            icon: Icons.picture_as_pdf_rounded,
+            color: const Color(0xFFEF4444),
+            title: 'Export PDF Report',
+            description:
+                'Full research report: statistical summary (mean ± std), FPS bar charts, backend comparison, automated conclusions. Ready for journal submission.',
+            buttonLabel: 'Export PDF',
+            loading: exportingPdf,
+            enabled: hasData,
+            onTap: onExportPdf,
+          ),
+          const SizedBox(height: 14),
+
+          _ExportCard(
+            icon: Icons.table_view_rounded,
+            color: const Color(0xFF10B981),
+            title: 'Export CSV Data',
+            description:
+                'Raw run data + statistical summary table (mean ± std per combo) + FPS timeline. Import into Excel, Python, or MATLAB for further analysis.',
+            buttonLabel: 'Export CSV',
+            loading: exportingCsv,
+            enabled: hasData,
+            onTap: onExportCsv,
+          ),
+          const SizedBox(height: 24),
+
+          // What's included
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Metrics Included in Export',
+                    style: GoogleFonts.outfit(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14)),
+                const SizedBox(height: 12),
+                _MetricGroup('Per Run (Raw)', [
+                  'Model name & backend type',
+                  'Run index & duration (minutes)',
+                  'Avg / Min / Max FPS',
+                  'Avg / Min / Max Latency (ms)',
+                  'Avg / Peak RAM (MB)',
+                  'Model size (MB)',
+                  'Detection success rate (%)',
+                  'FPS stability score',
+                  'Total inference count',
+                  'Warm-up frame count',
+                  'Timestamp & device info',
+                ]),
+                const SizedBox(height: 10),
+                _MetricGroup('Statistical Summary (per combo)', [
+                  'Mean FPS ± Std Dev',
+                  'Coefficient of Variation (CV%)',
+                  'Mean Latency ± Std Dev',
+                  'Mean RAM ± Std Dev',
+                  'Best & worst run index',
+                  'Mean success rate & stability',
+                ]),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetricGroup extends StatelessWidget {
+  final String title;
+  final List<String> items;
+
+  const _MetricGroup(this.title, this.items);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: const TextStyle(
+                color: Color(0xFF10B981),
+                fontSize: 11,
                 fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        Text(
-          'Ekspor data untuk kebutuhan jurnal dan penelitian.',
-          style: GoogleFonts.inter(color: Colors.white54, fontSize: 13),
-        ),
-        const SizedBox(height: 28),
-
-        // PDF Export
-        _ExportCard(
-          icon: Icons.picture_as_pdf_rounded,
-          color: const Color(0xFFEF4444),
-          title: 'Export PDF Report',
-          description:
-              'Laporan lengkap dengan semua statistik, bar chart perbandingan, dan kesimpulan otomatis. Siap untuk jurnal.',
-          buttonLabel: 'Export PDF',
-          loading: exportingPdf,
-          enabled: hasData,
-          onTap: onExportPdf,
-        ),
-        const SizedBox(height: 16),
-
-        // CSV Export
-        _ExportCard(
-          icon: Icons.table_view_rounded,
-          color: const Color(0xFF10B981),
-          title: 'Export CSV Data',
-          description:
-              'Raw data semua metrik + FPS timeline untuk analisis lebih lanjut di Excel/Python/MATLAB.',
-          buttonLabel: 'Export CSV',
-          loading: exportingCsv,
-          enabled: hasData,
-          onTap: onExportCsv,
-        ),
-        const SizedBox(height: 28),
-
-        // Metrics included
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Metrik yang Disertakan',
-                  style: GoogleFonts.outfit(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14)),
-              const SizedBox(height: 10),
-              ...[
-                'Average / Min / Max FPS',
-                'Average / Min / Max Latency (ms)',
-                'Average / Peak RAM Usage (MB)',
-                'Model Size (MB)',
-                'Average Objects per Frame',
-                'Detection Success Rate (%)',
-                'FPS Stability Score',
-                'Total Inference Count',
-                'Session Duration (s)',
-                'FPS Timeline (sampled)',
-              ].map((m) => Padding(
-                    padding: const EdgeInsets.only(bottom: 5),
-                    child: Row(children: [
-                      const Icon(Icons.check_circle_rounded,
-                          color: Color(0xFF10B981), size: 15),
-                      const SizedBox(width: 8),
-                      Text(m,
-                          style: GoogleFonts.inter(
-                              color: Colors.white70, fontSize: 12)),
-                    ]),
-                  )),
-            ],
-          ),
-        ),
-      ]),
+        const SizedBox(height: 6),
+        ...items.map((m) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.check_circle_rounded,
+                      color: Color(0xFF10B981), size: 13),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(m,
+                        style: const TextStyle(
+                            color: Colors.white60, fontSize: 11)),
+                  ),
+                ],
+              ),
+            )),
+      ],
     );
   }
 }
@@ -543,58 +1112,110 @@ class _ExportCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 22),
             ),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(title,
-                style: GoogleFonts.outfit(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15)),
-          ),
-        ]),
-        const SizedBox(height: 10),
-        Text(description,
-            style: GoogleFonts.inter(
-                color: Colors.white60, fontSize: 12, height: 1.5)),
-        const SizedBox(height: 14),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: enabled ? color : Colors.white12,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(vertical: 13),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(title,
+                  style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15)),
             ),
-            onPressed: enabled && !loading ? onTap : null,
-            child: loading
-                ? const SizedBox(
-                    height: 18,
-                    width: 18,
-                    child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2))
-                : Text(
-                    enabled ? buttonLabel : 'Jalankan deteksi terlebih dahulu',
-                    style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13),
-                  ),
+          ]),
+          const SizedBox(height: 10),
+          Text(description,
+              style: GoogleFonts.inter(
+                  color: Colors.white54, fontSize: 12, height: 1.5)),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: enabled ? color : Colors.white12,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 13),
+              ),
+              onPressed: enabled && !loading ? onTap : null,
+              child: loading
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2))
+                  : Text(
+                      enabled
+                          ? buttonLabel
+                          : 'Run a benchmark session first',
+                      style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13),
+                    ),
+            ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Shared: Empty State
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white12, size: 52),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: GoogleFonts.outfit(
+                  color: Colors.white38,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              style: GoogleFonts.inter(
+                  color: Colors.white24, fontSize: 12, height: 1.5),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
-      ]),
+      ),
     );
   }
 }

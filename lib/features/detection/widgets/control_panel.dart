@@ -65,6 +65,52 @@ class ControlPanelWidget extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
 
+                // ── Backend Selector Dropdown ─────────────────────────
+                Row(
+                  children: [
+                    const Icon(Icons.settings_input_component_rounded, color: Colors.white70, size: 16),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Inference Backend:',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                      decoration: BoxDecoration(
+                        color: Colors.white12,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          dropdownColor: const Color(0xFF1E293B),
+                          value: c.selectedBackend.value,
+                          icon: const Icon(Icons.arrow_drop_down, color: Colors.white70),
+                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                          onChanged: c.isSwitchingModel.value
+                              ? null
+                              : (String? val) {
+                                  if (val != null) {
+                                    c.changeBackend(val);
+                                  }
+                                },
+                          items: const [
+                            DropdownMenuItem(value: 'CPU', child: Text('CPU')),
+                            DropdownMenuItem(value: 'GPU', child: Text('GPU Delegate')),
+                            DropdownMenuItem(value: 'NNAPI', child: Text('NNAPI')),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
                 // ── Buttons row ───────────────────────────────────────
                 Row(
                   children: [

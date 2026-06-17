@@ -65,6 +65,23 @@ class TopHudWidget extends StatelessWidget {
             children: [
               if (realtime && !switching) ...[
                 const Divider(color: Colors.white10, height: 10),
+                // Active backend status display
+                Row(
+                  children: [
+                    const Icon(Icons.developer_board_rounded,
+                        color: Color(0xFF10B981), size: 14),
+                    const SizedBox(width: 6),
+                    Text(
+                      c.activeBackendStatus.value,
+                      style: const TextStyle(
+                        color: Color(0xFF10B981),
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
                 // ── Metrics row ────────────────────────────────────────
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,

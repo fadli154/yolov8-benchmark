@@ -15,7 +15,8 @@ dependencies:
   get_storage: ^2.1.1
 
   # Camera & Detection
-  flutter_vision: ^2.0.0
+  flutter_vision:
+    path: packages/flutter_vision
   camera: ^0.11.4
 
   # TTS
