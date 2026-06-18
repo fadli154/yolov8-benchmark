@@ -221,11 +221,14 @@ class _MetricsGrid extends StatelessWidget {
       _GridItem('Avg RAM', run.averageRam.toStringAsFixed(1), 'MB'),
       _GridItem('Peak RAM', run.peakRam.toStringAsFixed(1), 'MB'),
       _GridItem('Model Size', run.modelSizeMb.toStringAsFixed(2), 'MB'),
+      _GridItem('Avg Objects', run.averageObjects.toStringAsFixed(1), 'obj'),
+      _GridItem('Max Objects', run.maxObjects.toString(), 'obj'),
       _GridItem('Inferences', run.totalInferenceCount.toString(), ''),
       _GridItem(
           'Success Rate', (run.detectionSuccessRate * 100).toStringAsFixed(1), '%'),
       _GridItem(
           'Stability', (run.fpsStability * 100).toStringAsFixed(1), '%'),
+      _GridItem('Duration', '${run.sessionDurationSeconds}s', ''),
     ];
 
     return GridView.count(

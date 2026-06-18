@@ -1250,6 +1250,9 @@ class _ResultMetricsGrid extends StatelessWidget {
       _Item('Peak RAM', run.peakRam.toStringAsFixed(1), 'MB', Colors.white54),
       _Item('Model Size', run.modelSizeMb.toStringAsFixed(2), 'MB',
           Colors.white54),
+      _Item('Avg Objects', run.averageObjects.toStringAsFixed(1), 'obj',
+          const Color(0xFFEC4899)),
+      _Item('Max Objects', run.maxObjects.toString(), 'obj', Colors.white54),
       _Item('Inferences', run.totalInferenceCount.toString(), '',
           Colors.white54),
       _Item('Success Rate',
@@ -1258,6 +1261,7 @@ class _ResultMetricsGrid extends StatelessWidget {
       _Item('FPS Stability',
           (run.fpsStability * 100).toStringAsFixed(1), '%',
           const Color(0xFF8B5CF6)),
+      _Item('Duration', '${run.sessionDurationSeconds}s', '', Colors.white54),
     ];
 
     return GridView.count(

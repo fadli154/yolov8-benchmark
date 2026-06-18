@@ -443,6 +443,8 @@ class _LegacySessionCard extends StatelessWidget {
                   '${data.averageLatency.toStringAsFixed(0)} ms', Colors.white70),
               _MiniStat('Peak RAM',
                   '${data.peakRam.toStringAsFixed(0)} MB', Colors.white70),
+              _MiniStat('Objects',
+                  data.averageObjects.toStringAsFixed(1), const Color(0xFFEC4899)),
               _MiniStat('Success',
                   '${(data.detectionSuccessRate * 100).toStringAsFixed(0)}%',
                   Colors.white70),
@@ -597,6 +599,23 @@ class _StatisticsTab extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
+          // Average Objects stats grid
+          _StatsSection(
+            title: 'Average Detected Objects',
+            icon: Icons.auto_awesome_motion_rounded,
+            color: const Color(0xFFEC4899),
+            children: aggregated.values.map((agg) {
+              return MetricStatCard(
+                label: '${agg.modelName}\n${agg.backendType}',
+                meanStdValue: agg.meanObjects.toStringAsFixed(1),
+                unit: 'objects  •  ${agg.runCount} run(s)',
+                accentColor: const Color(0xFFEC4899),
+                icon: Icons.auto_awesome_motion_rounded,
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 20),
+
           // Full comparison table (scrollable)
           _FullStatsTable(aggregated: aggregated),
           const SizedBox(height: 16),
@@ -634,14 +653,20 @@ class _StatsSection extends StatelessWidget {
                   fontWeight: FontWeight.bold)),
         ]),
         const SizedBox(height: 10),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 8,
-          childAspectRatio: 1.5,
-          children: children,
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final cardWidth = (constraints.maxWidth - 8) / 2;
+            return Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: children.map((child) {
+                return SizedBox(
+                  width: cardWidth,
+                  child: child,
+                );
+              }).toList(),
+            );
+          },
         ),
       ],
     );
@@ -701,6 +726,7 @@ class _FullStatsTable extends StatelessWidget {
                 DataColumn(label: Text('CV%'), numeric: true),
                 DataColumn(label: Text('Latency (μ±σ)')),
                 DataColumn(label: Text('RAM (μ±σ)')),
+                DataColumn(label: Text('Avg Obj'), numeric: true),
                 DataColumn(label: Text('Stability'), numeric: true),
                 DataColumn(label: Text('Success'), numeric: true),
               ],
@@ -719,6 +745,7 @@ class _FullStatsTable extends StatelessWidget {
                       '${agg.meanLatency.toStringAsFixed(1)}±${agg.stdLatency.toStringAsFixed(1)}')),
                   DataCell(Text(
                       '${agg.meanRam.toStringAsFixed(0)}±${agg.stdRam.toStringAsFixed(0)}')),
+                  DataCell(Text(agg.meanObjects.toStringAsFixed(1))),
                   DataCell(Text(
                       '${(agg.meanFpsStability * 100).toStringAsFixed(0)}%')),
                   DataCell(Text(

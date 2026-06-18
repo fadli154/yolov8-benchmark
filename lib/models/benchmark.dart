@@ -90,6 +90,16 @@ class ModelBenchmarkData {
     return detected / objectsRecords.length;
   }
 
+  int get maxObjects {
+    if (objectsRecords.isEmpty) return 0;
+    return objectsRecords.reduce(max);
+  }
+
+  int get minObjects {
+    if (objectsRecords.isEmpty) return 0;
+    return objectsRecords.reduce(min);
+  }
+
   int get sessionDurationSeconds =>
       sessionEnd.difference(sessionStart).inSeconds;
 
@@ -264,6 +274,16 @@ class BenchmarkRun {
     if (objectsRecords.isEmpty) return 0.0;
     final detected = objectsRecords.where((o) => o > 0).length;
     return detected / objectsRecords.length;
+  }
+
+  int get maxObjects {
+    if (objectsRecords.isEmpty) return 0;
+    return objectsRecords.reduce(max);
+  }
+
+  int get minObjects {
+    if (objectsRecords.isEmpty) return 0;
+    return objectsRecords.reduce(min);
   }
 
   // ── Session ───────────────────────────────────────────────────────────────

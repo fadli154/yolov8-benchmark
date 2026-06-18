@@ -169,6 +169,14 @@ class AggregatedSummaryCard extends StatelessWidget {
                   color: Colors.white70,
                 ),
               ),
+              _VerticalDivider(),
+              Expanded(
+                child: _MetricColumn(
+                  label: 'Avg Objects',
+                  value: agg.meanObjects.toStringAsFixed(1),
+                  color: const Color(0xFFEC4899),
+                ),
+              ),
             ],
           ),
           if (hasMultipleRuns) ...[

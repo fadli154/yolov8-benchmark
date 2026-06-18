@@ -115,10 +115,11 @@ class MetricStatCard extends StatelessWidget {
             ),
           if (minValue != null && maxValue != null) ...[
             const SizedBox(height: 6),
-            Row(
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
               children: [
                 _MinMaxChip(label: 'min', value: minValue!, color: Colors.blue),
-                const SizedBox(width: 6),
                 _MinMaxChip(label: 'max', value: maxValue!, color: Colors.orange),
               ],
             ),

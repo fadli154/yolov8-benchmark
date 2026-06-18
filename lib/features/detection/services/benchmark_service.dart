@@ -4,6 +4,7 @@ import 'package:csv/csv.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -24,7 +25,53 @@ class DetectionBenchmarkService {
   static const String _runsKey = 'benchmark_runs_v2';
 
   final GetStorage _storage = GetStorage();
+  final Box _hiveBox = Hive.box('benchmark_box');
   static const _platform = MethodChannel('com.example.waste_detection/memory');
+
+  DetectionBenchmarkService() {
+    _migrateAndLoad();
+  }
+
+  void _migrateAndLoad() {
+    try {
+      const String migrationKey = 'get_storage_migrated_v1';
+      final bool alreadyMigrated = _hiveBox.get(migrationKey, defaultValue: false) as bool;
+      
+      if (!alreadyMigrated) {
+        debugPrint('[BenchmarkService] Running GetStorage to Hive data migration...');
+        
+        // Load legacy benchmark history from GetStorage
+        if (_storage.hasData(_storageKey)) {
+          final raw = _storage.read<Map>(_storageKey);
+          if (raw != null) {
+            _hiveBox.put(_storageKey, Map<String, dynamic>.from(raw));
+            debugPrint('[BenchmarkService] Migrated legacy history to Hive.');
+          }
+        }
+        
+        // Load runs from GetStorage
+        if (_storage.hasData(_runsKey)) {
+          final rawRuns = _storage.read<List>(_runsKey);
+          if (rawRuns != null) {
+            _hiveBox.put(_runsKey, List<dynamic>.from(rawRuns));
+            debugPrint('[BenchmarkService] Migrated runs to Hive.');
+          }
+        }
+        
+        // Clear GetStorage data
+        _storage.remove(_storageKey);
+        _storage.remove(_runsKey);
+        
+        // Mark migration as complete in Hive
+        _hiveBox.put(migrationKey, true);
+        debugPrint('[BenchmarkService] GetStorage to Hive migration complete.');
+      }
+    } catch (e) {
+      debugPrint('[BenchmarkService] Data migration error: $e');
+    }
+
+    loadFromStorage();
+  }
 
   // ── Legacy passive mode accumulators ─────────────────────────────────────
 
@@ -370,38 +417,39 @@ class DetectionBenchmarkService {
     map['history'] = history.map((e) => e.toJson()).toList();
     if (nanoData != null) map['nano'] = nanoData!.toJson();
     if (smallData != null) map['small'] = smallData!.toJson();
-    await _storage.write(_storageKey, map);
+    await _hiveBox.put(_storageKey, map);
   }
 
   Future<void> _persistAll() async {
     await _persistToStorage();
-    await _storage.write(_runsKey, runs.map((r) => r.toJson()).toList());
+    await _hiveBox.put(_runsKey, runs.map((r) => r.toJson()).toList());
   }
 
   void loadFromStorage() {
     // Load legacy history
     try {
-      final raw = _storage.read<Map<String, dynamic>>(_storageKey);
+      final raw = _hiveBox.get(_storageKey);
       if (raw != null) {
         history.clear();
-        if (raw.containsKey('history')) {
-          final list = raw['history'] as List;
+        final rawMap = Map<String, dynamic>.from(raw as Map);
+        if (rawMap.containsKey('history')) {
+          final list = rawMap['history'] as List;
           for (final item in list) {
             history.add(ModelBenchmarkData.fromJson(
                 Map<String, dynamic>.from(item as Map)));
           }
         }
-        if (raw.containsKey('nano')) {
+        if (rawMap.containsKey('nano')) {
           final legacyNano = ModelBenchmarkData.fromJson(
-              Map<String, dynamic>.from(raw['nano'] as Map));
+              Map<String, dynamic>.from(rawMap['nano'] as Map));
           nanoData = legacyNano;
           if (!history.any((h) => h.sessionStart == legacyNano.sessionStart)) {
             history.add(legacyNano);
           }
         }
-        if (raw.containsKey('small')) {
+        if (rawMap.containsKey('small')) {
           final legacySmall = ModelBenchmarkData.fromJson(
-              Map<String, dynamic>.from(raw['small'] as Map));
+              Map<String, dynamic>.from(rawMap['small'] as Map));
           smallData = legacySmall;
           if (!history.any((h) => h.sessionStart == legacySmall.sessionStart)) {
             history.add(legacySmall);
@@ -414,13 +462,13 @@ class DetectionBenchmarkService {
 
     // Load deliberate benchmark runs
     try {
-      final rawRuns = _storage.read<List>(_runsKey);
+      final rawRuns = _hiveBox.get(_runsKey);
       if (rawRuns != null) {
         runs.clear();
-        for (final item in rawRuns) {
+        for (final item in rawRuns as List) {
           runs.add(BenchmarkRun.fromJson(Map<String, dynamic>.from(item as Map)));
         }
-        debugPrint('[BenchmarkService] Loaded ${runs.length} benchmark runs from storage.');
+        debugPrint('[BenchmarkService] Loaded ${runs.length} benchmark runs from Hive.');
       }
     } catch (e) {
       debugPrint('[BenchmarkService] loadFromStorage (runs) error: $e');
@@ -434,8 +482,8 @@ class DetectionBenchmarkService {
     runs.clear();
     _benchmarkTimer?.cancel();
     _benchSessionActive = false;
-    _storage.remove(_storageKey);
-    _storage.remove(_runsKey);
+    _hiveBox.delete(_storageKey);
+    _hiveBox.delete(_runsKey);
     _clearAccumulators();
     debugPrint('[BenchmarkService] All data reset.');
   }

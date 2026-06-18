@@ -2,14 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'features/detection/services/benchmark_service.dart';
 import 'pages/home_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize GetStorage for benchmark persistence
+  // Initialize GetStorage for legacy benchmark persistence (needed for migration)
   await GetStorage.init();
+
+  // Initialize Hive for offline-first persistent storage
+  await Hive.initFlutter();
+  await Hive.openBox('benchmark_box');
 
   // Register global services (permanent = survive route changes)
   Get.put(DetectionBenchmarkService(), permanent: true);
